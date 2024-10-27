@@ -1,6 +1,6 @@
 # survey_medical streamlit APP
 
-This app was designed to facilitate the collection of medical data from single or multiple centers. When the collection was completed, this app could be used to exhibit the team's research. 
+This app was designed to facilitate medical data collection from single or multiple centers. When the collection was completed, this app could exhibit the team's research. 
 
 Techniquely, this APP was built with Streamlit and MongoDB. The APP has three modules, including 'Introduction', 'Survey,' and 'Data Glance'. 
 
@@ -14,3 +14,4 @@ Techniquely, this APP was built with Streamlit and MongoDB. The APP has three mo
 ![image](https://github.com/user-attachments/assets/60f754fa-3c60-4ae3-b230-3f08ec0d9c7a)
 
 
+The app has been deployed on the internet and can be accessed at https://medical-surgery-cohort.streamlit.app/.
