@@ -1,36 +1,50 @@
 
 import streamlit as st
-from deta import Deta
+from st_mongo_connection import MongoDBConnection
 import pandas as pd     
 import plotly.express as px
 import streamlit_survey as ss
 import json
 from streamlit_option_menu import option_menu
+from pprint import pprint
+import altair as alt
+st.set_page_config(    
+    page_title="调查问卷收集数据",    
+    page_icon="🏂",    
+    layout="wide",    
+    initial_sidebar_state="expanded")    
+
+alt.themes.enable("dark")    
 # sidebar for navigation
 with st.sidebar:
     #logo
     st.image('logo.png', use_column_width='auto')
-    
+    #导航栏目录
     selected = option_menu('目录',
 
                            ['研究内容',
-                            '调查问卷'
+                            '调查问卷',
+                            '数据概览'
                             ],
                            menu_icon='hospital-fill',
-                           icons=['activity', 'heart'],
+                           icons=['activity', 'heart', 'bar-chart-fill'],
                            default_index=1)
     st.header('研究团队')
     '''
     姓名：张三      性别：男  
-    年龄：37岁      籍贯：江苏徐州
+    年龄：47岁      籍贯：江苏徐州
     毕业院校：徐州医科大学  
-    学    历：博士研究生
-    政治面貌：中共党员
-
     '''
-    st.header('联系方式')
+    st.header('APP制作说明')
+    '''
+    - 本APP是通过streamlit+MongoDB构建的调查问卷收集数据的应用，数据出储存在用户注册的MongoDB数据库中。\n
+    - 部署在网络上，可以实现单中心或多中心的数据录入，实现多中心的试验研究，如部署在APPmatrix上可以实现用户名和密码登陆。\n
+    - 在数据收集完毕之后，可以改造成一个数据库或课题组的展示页面，用于展示课题组的研究贡献。\n
+    - 目前APP免费更换成用户数据，并部署到云端，支持各个模块的调整。\n
+    - 作者联系方式：15205136980（微信同号）
+    '''
 
-
+#页面1
 if selected=='研究内容':
     st.title('⚕️研究内容')
     st.header('一、研究背景')
@@ -86,139 +100,207 @@ if selected=='研究内容':
 优化治疗方案：根据课题研究结果，医生可以针对不同患者的具体情况，制定个性化的营养干预方案，提高治疗的针对性和有效性。
 
              '''
-             
+#页面2             
 if selected=='调查问卷':
 # Data to be written to Deta Base
     st.title('⚕️调查问卷📋')
     st.write('''
-            填写注意事项：\n
-            ID是患者的唯一标识，同一患者请保证相同的ID号，多次随访请填写相同的ID。
+            注意事项和建议：\n
+            - ID是患者的唯一标识，同一患者请保证相同的ID号，多次随访请填写相同的ID。\n
+            - 建议设计多个相互关联的结局变量，以便得出更加确实的结论。\n
+            - 数据采集时，建议设定一定的主题，即设定一类重点考察的预测变量，并建议关键的观察指标采用的多种测量方式，以便筛选最佳的测量手段，而丰富分析结果。
             ''')
+    connection = st.connection("mongodb", type=MongoDBConnection)
 
-
-    '***'  
-    #首先建立一个问卷调查的界面
+    def submit_survey(survey: ss.StreamlitSurvey, connection: MongoDBConnection) -> None:
+        """Insert the survey data into the MongoDB database."""
+        data = survey.to_json()
+        data = json.loads(data)
+        
+        submit_data = {item["label"]: item["value"] for item in data.values()}
+        
+        connection.insert(submit_data)
+    
+    #首先建立一个问卷object
     survey = ss.StreamlitSurvey("Survey Example - Advanced Usage")
     #构建页面
-    pages = survey.pages(3, on_submit=lambda: st.success("  "))
-    with pages:
-        if pages.current == 0:#第一页，患者基本信息
+    pages = survey.pages(3, on_submit=lambda: submit_survey(survey,connection))
+    
+    with st.container(height=800,border=True):
+        with pages:
+            if pages.current == 0:#第一页，患者基本信息
+                
+                st.subheader("1.患者的基本信息")#问题1
+                
+                survey.number_input("编号", min_value=0, max_value=1000,value=0,id="id")
+                
+                survey.selectbox("采取何种治疗措施？",options=["常规饮食组", "ONS组",'ONS联合益生菌组'],id="treatment")
+                
+                survey.slider("年龄？",min_value=0, max_value=100,step=1,  id="age")
+                
+                survey.radio("性别？",options=["男", "女"],id="gender",horizontal=True)
+                
+                survey.slider('身高（cm）',min_value=0, max_value=200,step=1, id="height")
+                
+                survey.slider('体重（kg）',min_value=0, max_value=200,step=1, id="weight")
+                
             
-            st.subheader("1.患者的基本信息")#问题1
-            
-            survey.number_input("识别号（ID）", min_value=0, max_value=1000,value=0,id="id")
-            
-            survey.selectbox("患者的治疗方案？",options=["常规饮食组", "ONS组",'ONS联合益生菌组'],id="treatment")
-            
-            survey.slider("患者的年龄?",min_value=0, max_value=100,step=1,  id="age")
-            
-            survey.radio("患者的性别",options=["男", "女"],id="gender",horizontal=True)
-            
-            survey.slider('患者的身高(cm)',min_value=0, max_value=200,step=1, id="height")
-            
-            survey.slider('患者的体重(kg)',min_value=0, max_value=200,step=1, id="weight")
-            
-        
-        elif pages.current == 1:#第二页，患者术前和术中信息
-            st.subheader("2.患者的术前和术中信息")
-            
-            survey.radio('手术类型？',options=["全胃切除","非全胃切除"],id="operation_type",horizontal=True)
-            
-            survey.slider('ASA评分？',min_value=0, max_value=10,step=1,id="asa")
-            
-            survey.slider('ECOG评分？',min_value=0, max_value=10,step=1,id="ecog")
-            
-            survey.slider('查尔森合并症数？',min_value=0, max_value=100,step=1, id="cci")
-            
-            survey.slider('是否吸烟？',min_value=0, max_value=100,step=1,  id="smoking")
-            
-            survey.radio('是否饮酒？',options=["Yes","No"],id="alcohol",horizontal=True)
-            
-            survey.radio('TNM分期？',options=["I期","II期",'III期',"IV期"],id="tnm_stage",horizontal=True)
-            
-            survey.slider('术前生活质量评分？',min_value=0, max_value=10,step=1,id="pre_life_quality")
-            
-            survey.slider('术前握力？',min_value=0, max_value=10,step=1,id="pre_hand_strength")
-            
-            survey.slider('术前骨骼肌指数？',min_value=0, max_value=100,step=1,id="pre_smi")
-            
-            survey.slider('术前皮下脂肪指数？',min_value=0, max_value=100,step=1,id="pre_sati")
-            
-            survey.slider('术前内脏脂肪指数？',min_value=0, max_value=100,step=1,id="pre_vati")
-            
-            survey.dateinput('出院日期',id="discharge_date")
-            
-            
-        if pages.current == 2:#第三页，患者随访信息
-            
-            st.subheader('3.患者随访信息')
-            survey.dateinput('随访日期',id="follow_up_timepoint")
+            elif pages.current == 1:#第二页，患者术前和术中信息
+                st.subheader("2.患者的术前和术中信息")
+                
+                survey.radio('手术类型？',options=["全胃切除","非全胃切除"],id="operation_type",horizontal=True)
+                
+                survey.slider('ASA评分？',min_value=0, max_value=10,step=1,id="asa")
+                
+                survey.slider('ECOG评分？',min_value=0, max_value=10,step=1,id="ecog")
+                
+                survey.slider('查尔森合并症数？',min_value=0, max_value=100,step=1, id="cci")
+                
+                survey.slider('是否吸烟？',min_value=0, max_value=100,step=1,  id="smoking")
+                
+                survey.radio('是否饮酒？',options=["Yes","No"],id="alcohol",horizontal=True)
+                
+                survey.radio('TNM分期？',options=["I期","II期",'III期',"IV期"],id="tnm_stage",horizontal=True)
+                
+                survey.slider('术前生活质量评分？',min_value=0, max_value=10,step=1,id="pre_life_quality")
+                
+                survey.slider('术前握力？',min_value=0, max_value=10,step=1,id="pre_hand_strength")
+                
+                survey.slider('术前骨骼肌指数？',min_value=0, max_value=100,step=1,id="pre_smi")
+                
+                survey.slider('术前皮下脂肪指数？',min_value=0, max_value=100,step=1,id="pre_sati")
+                
+                survey.slider('术前内脏脂肪指数？',min_value=0, max_value=100,step=1,id="pre_vati")
+                
+                survey.dateinput('出院日期',id="discharge_date")
+                
+                
+            if pages.current == 2:#第三页，患者随访信息
+                
+                st.subheader('3.患者随访信息')
+                
+                survey.dateinput('随访日期',id="follow_up_timepoint")
 
-            survey.radio('随访时间',options=[3,6,12],id="follow_up_time",horizontal=True)
+                survey.radio('随访时间',options=[3,6,12],id="follow_up_time",horizontal=True)
+                
+                survey.slider('随访骨骼肌指数？',min_value=0, max_value=100,step=1, id="post_smi")
+                
+                survey.slider('随访皮下脂肪指数？',min_value=0, max_value=100,step=1, id="post_sati")
+                
+                survey.slider('随访内脏脂肪指数？',min_value=0, max_value=100,step=1, id="post_vati")
+                
+                survey.slider('随访生活质量评分？',min_value=0, max_value=100,step=1,id="post_life_quality")
+                
+                survey.radio('是否发生死亡',options=["Yes","No"],id="death",horizontal=True)
             
-            survey.slider('随访骨骼肌指数？',min_value=0, max_value=100,step=1, id="post_smi")
-            
-            survey.slider('随访皮下脂肪指数？',min_value=0, max_value=100,step=1, id="post_sati")
-            
-            survey.slider('随访内脏脂肪指数？',min_value=0, max_value=100,step=1, id="post_vati")
-            
-            survey.slider('随访生活质量评分？',min_value=0, max_value=100,step=1,id="post_life_quality")
-            
-            survey.radio('是否发生死亡',options=["Yes","No"],id="death",horizontal=True)
-            
-            
-    '***'       
-    st.subheader("数据预览:")        
+    
+    st.subheader("输入数据预览:")        
     data=survey.to_json()# string形式
     #string to json
     data=json.loads(data)
     st.table(data)
+#页面3
+def create_donut_chart(input_response: int, input_text: str, input_color: str, chart_width: int=200) -> alt.Chart:
+    """
+    Create an Altair donut chart with a given input response, input text, and input color.
 
-    submit=st.button("提交",type="primary",use_container_width=True)
-    '*请再次检查数据，确认数据正确无误！'
+    Args:
+        input_response (int): The percentage value to display on the chart.
+        input_text (str): The text to display on the chart.
+        input_color (str): The color to use for the chart. Options are 'blue', 'green', 'orange', or 'red'.
 
-    #josn to dataframe
+    Returns:
+        alt.Chart: The resulting donut chart.
+    """
+    COLORS = {
+        'blue': ['#29b5e8', '#155F7A'],
+        'green': ['#27AE60', '#12783D'],
+        'orange': ['#F39C12', '#875A12'],
+        'red': ['#E74C3C', '#781F16']
+    }
 
-    data_df=pd.DataFrame(data)
-    data_df_value=data_df[data_df.index=='value']
-    data_dict=data_df_value.to_dict(orient='index')
-    submit_value=data_dict['value']
-    # st.write(submit_value)
+    if input_color not in COLORS:
+        raise ValueError(f"Invalid input_color: {input_color}")
 
-    # Connect to Deta Base with your Data Key
-    deta = Deta(st.secrets["data_key"])# data_key was stored in secret.toml file 
+    chart_color = COLORS[input_color]
 
-    # Create a new database "example-db"
-    # If you need a new database, just use another name.
-    db = deta.Base("survey_zhang")#my database
-    if submit:
-        st.balloons()   
-        db.put(submit_value)
+    data = pd.DataFrame({
+        'Topic': ['', input_text],
+        '% value': [100 - input_response, input_response]
+    })
 
-    "***"
-    with st.container():
-        st.subheader("数据展示:")
-        # This reads all items from the database and displays them to your app.
-        # db_content is a list of dictionaries. You can do everything you want with it.
-        db_content = db.fetch().items
-        df_plot=st.dataframe(db_content)
-    #bubble chart
-    #creat dataframe for json data
-    df_plot=pd.DataFrame(db_content)
-    interested_var = st.selectbox("choose variable", df_plot.columns)
+    background_data = pd.DataFrame({
+        'Topic': ['', input_text],
+        '% value': [100, 0]
+    })
 
-    var_count_plot = df_plot[interested_var].value_counts().rename_axis(interested_var).reset_index(name='count')
+    chart = alt.Chart(data).mark_arc(innerRadius=45, cornerRadius=25).encode(
+        theta='% value',
+        color=alt.Color('Topic:N', scale=alt.Scale(domain=[input_text, ''], range=chart_color), legend=None)
+    ).properties(width=chart_width, height=chart_width)
 
-    '***'   
-    with st.container():
-        st.write("Showing data with interested variable:", interested_var)
-        col1, col2 = st.columns(2)
-        with col2:
-            st.write(var_count_plot) 
+    text_chart = chart.mark_text(align='center', color=chart_color[0], font='Lato', fontSize=32, fontWeight=700, fontStyle='italic').encode(text=alt.value(f'{input_response} %'))
+
+    background_chart = alt.Chart(background_data).mark_arc(innerRadius=45, cornerRadius=20).encode(
+        theta='% value',
+        color=alt.Color('Topic:N', scale=alt.Scale(domain=[input_text, ''], range=chart_color), legend=None)
+    ).properties(width=chart_width, height=chart_width)
+
+    return background_chart + chart + text_chart
+
+if selected=='数据概览':
+    connection = st.connection("mongodb", type=MongoDBConnection)
+    db_content = connection.find({},ttl=30)
+    #将db_content转化为dataframe
+    df_plot = pd.DataFrame.from_records(db_content)
         
+    with st.container():   
+        col1, col2,col3 = st.columns(3)
+        #count the number of each records
         with col1:
+            records_count =connection.count({},ttl=30)
+            suppose_records_count=st.number_input('期望记录数量', min_value=0, max_value=5000, value=500, step=1)
+            records_complete = round((records_count/suppose_records_count)*100)    
+            records = create_donut_chart(records_complete, 'Inbound Migration', 'green', 200)
+            st.write('目前数据量：',records_count,'条，完成度为：',records_complete,'%')
+            st.altair_chart(records)
+        with col2:
+            # count the NA
+            #select the variables of df_plot
+            selected_var=st.selectbox('选择需要查看的变量', df_plot.columns[1:])
+            na_count = df_plot[selected_var].isna().sum()
+            na_records = round((na_count/records_complete)*100)    
+            st.write('目前数据量：',records_count,'条，其中缺失数据比率：',na_records,'%')
+            na_records=create_donut_chart(na_records, 'Missing Values', 'red', 200)
+            st.altair_chart(na_records)
+        with col3:
+            # count the duplicate
+            #select the variables of df_plot
+            selected_var2=st.selectbox('选择需要查看的变量', df_plot.columns)
+            duplicate_count = df_plot[selected_var2].duplicated().sum()
+            duplicate_records = round((duplicate_count/records_count)*100)
+            st.write('目前数据量：',records_count,'条，其中重复数据比率：',duplicate_records,'%')
+            duplicate_records=create_donut_chart(duplicate_records, 'Duplicate Values', 'orange', 200)
+            st.altair_chart(duplicate_records)
+            
+    
+    
+    with st.container():
+        col1, col2 = st.columns(2)
+        with col1:
+            interested_var = st.selectbox("选择计数的变量(分类)", df_plot.columns[1:])
+            var_count_plot = df_plot[interested_var].value_counts().rename_axis(interested_var).reset_index(name='count')
             fig = px.pie(var_count_plot, values='count', names=f'{interested_var}', title=f'{interested_var} Count')
             st.plotly_chart(fig)
-        
-        fig_density = px.density_contour(df_plot, x=f'{interested_var}',title=f'{interested_var} Density')
-        st.plotly_chart(fig_density)
+        with col2:
+            interested_var2 = st.selectbox("选择计数的变量（连续）", df_plot.columns[2:])
+            # var_count_plot2 = df_plot[interested_var2].value_counts().rename_axis(interested_var2).reset_index(name='count')
+            #density plot
+            fig2 = px.histogram(df_plot, x=interested_var2, nbins=20, title=f'{interested_var2} Density',color_discrete_sequence=['red'])
+            
+            st.plotly_chart(fig2)
+
+    st.subheader("数据展示:")
+    # db_content is a list of dictionaries. You can do everything you want with it.
+    st.dataframe(db_content)
+    
