@@ -1,7 +1,7 @@
 plotly
-streamlit_survey==0.1.0
-streamlit==1.26.0
-streamlit-option-menu==0.3.13 
+streamlit_survey
+streamlit
+streamlit-option-menu
 st_mongo_connection
 pandas
 altair
